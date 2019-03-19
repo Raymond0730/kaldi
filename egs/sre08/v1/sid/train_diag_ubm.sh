@@ -17,7 +17,7 @@
 # Begin configuration section.
 nj=4
 cmd=run.pl
-num_iters=4
+num_iters=20
 stage=-2
 num_gselect=30 # Number of Gaussian-selection indices to use while training
                # the model.
@@ -150,4 +150,4 @@ done
 $cleanup && rm $dir/gselect.*.gz
 
 mv $dir/$num_iters.dubm $dir/final.dubm || exit 1;
-exit 0;
+echo "Finish UBM training"

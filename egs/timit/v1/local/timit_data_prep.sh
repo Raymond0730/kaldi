@@ -10,8 +10,7 @@ if [ $# -ne 1 ]; then
 fi
 
 dir=`pwd`/data/local/data
-lmdir=`pwd`/data/local/nist_lm
-mkdir -p $dir $lmdir
+mkdir -p $dir 
 local=`pwd`/local
 utils=`pwd`/utils
 conf=`pwd`/conf
@@ -25,7 +24,6 @@ if [ ! -x $sph2pipe ]; then
 fi
 
 [ -f $conf/test_spk.list ] || error_exit "$PROG: Eval-set speaker list not found.";
-[ -f $conf/dev_spk.list ] || error_exit "$PROG: dev-set speaker list not found.";
 
 # First check if the train & test directories exist (these can either be upper-
 # or lower-cased
@@ -49,25 +47,26 @@ fi
 tmpdir=$(mktemp -d /tmp/kaldi.XXXX);
 trap 'rm -rf "$tmpdir"' EXIT
 
-# Get the list of speakers. The list of speakers in the 24-speaker core test
-# set and the 50-speaker development set must be supplied to the script. All
-# speakers in the 'train' directory are used for training.
+# Get the list of speakers. 
+# All speakers in the 'train' directory are used for training.
 if $uppercased; then
-  tr '[:lower:]' '[:upper:]' < $conf/dev_spk.list > $tmpdir/dev_spk
-  tr '[:lower:]' '[:upper:]' < $conf/test_spk.list > $tmpdir/test_spk
+  tr '[:lower:]' '[:upper:]' < $conf/test_spk > $tmpdir/test_spk
+  tr '[:lower:]' '[:upper:]' < $conf/test_spk_unknown > $tmpdir/unknown_spk
+  tr '[:lower:]' '[:upper:]' < $conf/dev_spk > $tmpdir/dev_spk
   ls -d "$*"/TRAIN/DR*/* | sed -e "s:^.*/::" > $tmpdir/train_spk
 else
-  tr '[:upper:]' '[:lower:]' < $conf/dev_spk.list > $tmpdir/dev_spk
-  tr '[:upper:]' '[:lower:]' < $conf/test_spk.list > $tmpdir/test_spk
+  tr '[:upper:]' '[:lower:]' < $conf/test_spk > $tmpdir/test_spk
+  tr '[:upper:]' '[:lower:]' < $conf/test_spk_unknown > $tmpdir/unknown_spk
+  tr '[:upper:]' '[:lower:]' < $conf/dev_spk > $tmpdir/dev_spk
   ls -d "$*"/train/dr*/* | sed -e "s:^.*/::" > $tmpdir/train_spk
 fi
 
 cd $dir
-for x in train dev test; do
-  # First, find the list of audio files (use only si & sx utterances).
+for x in train test dev unknown; do
+  # First, find the list of audio files.
   # Note: train & test sets are under different directories, but doing find on
   # both and grepping for the speakers will work correctly.
-  find $*/{$train_dir,$test_dir} -not \( -iname 'SA*' \) -iname '*.WAV' \
+  find $*/{$train_dir,$test_dir} -iname '*.WAV' \
     | grep -f $tmpdir/${x}_spk > ${x}_sph.flist
 
   sed -e 's:.*/\(.*\)/\(.*\).\(WAV\|wav\)$:\1_\2:' ${x}_sph.flist \
@@ -76,23 +75,6 @@ for x in train dev test; do
     | sort -k1,1 > ${x}_sph.scp
 
   cat ${x}_sph.scp | awk '{print $1}' > ${x}.uttids
-
-  # Now, Convert the transcripts into our format (no normalization yet)
-  # Get the transcripts: each line of the output contains an utterance
-  # ID followed by the transcript.
-  find $*/{$train_dir,$test_dir} -not \( -iname 'SA*' \) -iname '*.PHN' \
-    | grep -f $tmpdir/${x}_spk > $tmpdir/${x}_phn.flist
-  sed -e 's:.*/\(.*\)/\(.*\).\(PHN\|phn\)$:\1_\2:' $tmpdir/${x}_phn.flist \
-    > $tmpdir/${x}_phn.uttids
-  while read line; do
-    [ -f $line ] || error_exit "Cannot find transcription file '$line'";
-    cut -f3 -d' ' "$line" | tr '\n' ' ' | perl -ape 's: *$:\n:;'
-  done < $tmpdir/${x}_phn.flist > $tmpdir/${x}_phn.trans
-  paste $tmpdir/${x}_phn.uttids $tmpdir/${x}_phn.trans \
-    | sort -k1,1 > ${x}.trans
-
-  # Do normalization steps.
-  cat ${x}.trans | $local/timit_norm_trans.pl -i - -m $conf/phones.60-48-39.map -to 48 | sort > $x.text || exit 1;
 
   # Create wav.scp
   awk '{printf("%s '$sph2pipe' -f wav %s |\n", $1, $2);}' < ${x}_sph.scp > ${x}_wav.scp
@@ -104,25 +86,6 @@ for x in train dev test; do
   # Prepare gender mapping
   cat $x.spk2utt | awk '{print $1}' | perl -ane 'chop; m:^.:; $g = lc($&); print "$_ $g\n";' > $x.spk2gender
 
-  # Prepare STM file for sclite:
-  wav-to-duration --read-entire-file=true scp:${x}_wav.scp ark,t:${x}_dur.ark || exit 1
-  awk -v dur=${x}_dur.ark \
-  'BEGIN{
-     while(getline < dur) { durH[$1]=$2; }
-     print ";; LABEL \"O\" \"Overall\" \"Overall\"";
-     print ";; LABEL \"F\" \"Female\" \"Female speakers\"";
-     print ";; LABEL \"M\" \"Male\" \"Male speakers\"";
-   }
-   { wav=$1; spk=wav; sub(/_.*/,"",spk); $1=""; ref=$0;
-     gender=(substr(spk,0,1) == "f" ? "F" : "M");
-     printf("%s 1 %s 0.0 %f <O,%s> %s\n", wav, spk, durH[wav], gender, ref);
-   }
-  ' ${x}.text >${x}.stm || exit 1
-
-  # Create dummy GLM file for sclite:
-  echo ';; empty.glm
-  [FAKE]     =>  %HESITATION     / [ ] __ [ ] ;; hesitation token
-  ' > ${x}.glm
 done
 
 echo "Data preparation succeeded"

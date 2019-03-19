@@ -1,0 +1,38 @@
+Speaker Identification Model:
+
+data_prep.sh is to prepare the data, the training set uses all utterances in /timit/TRAIN, the development set and test set speakers list is in conf/dev_skp and conf/test_spk. 
+
+train.sh uses the training set to train a ubm, the results is in exp/diag_ubm/final.dubm
+
+dev.sh and train.sh have the same work flow, it splits the each speaker utterances for enrollment and evaluation, then uses the utterances in enrollment to train a speaker model for each speaker, the results are in exp/spk_gmm. For evaluation, the average log likelihoods of each speaker model for each utterances is calculated. The results are in exp/score
+
+Training set: 462 speakers(4620 utterances)
+Dev set: 50 speakers, each speaker has 10 utterances. 7 utterances are used for enrollment and 3 utterances are used for evaluation.
+Use the dev set to tune the number of components in UBM: 16 is the best.
+
+Test set(7 utterances for enrollment): 
+24 speakers. Error rate is: 0.02,0.09,0(3 times)
+15 speakers. Error rate is: 0.02,0.06,0.02
+12 speakers. Error rate is: 0.02,0,0.02
+less or equal to 10 speakers, basically no error
+
+3 utterances for enrollment:
+10 speakers, error rate is: 0.0285, 0.0285,0.014
+
+5 utterances for enrollment:
+10 speakers, error rate is: 0.02, 0.02,0.02
+
+1 utterances for enrollment:
+10 speakers, error rate is: 0.21, 0.27,0.22
+5 speakers, error rate is: 0.20, 0.08,0.15
+2 speakers, error rate is: 0.0, 0.0,0.0
+3 speakers, error rate is: 0.22, 0.18,0.11
+
+2 utterances for enrollment:
+10 speakers, error rate is: 0.11, 0.11,0.175
+5 speakers, error rate is: 0.07, 0.07,0.02
+3 speakers, error rate is: 0.04, 0.08,0.08
+
+
+
+
